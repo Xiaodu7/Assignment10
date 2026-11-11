@@ -82,20 +82,25 @@ def managed_db_session():
 # ======================================================================================
 # Server Startup / Healthcheck
 # ======================================================================================
+
 def wait_for_server(url: str, timeout: int = 30) -> bool:
-    """
-    Wait for server to be ready, raising an error if it never becomes available.
-    """
+    """Wait for the FastAPI server to start."""
     start_time = time.time()
+
     while (time.time() - start_time) < timeout:
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=3)
+
             if response.status_code == 200:
                 return True
-        except requests.exceptions.ConnectionError:
+
+        except requests.exceptions.RequestException:
             pass
+
         time.sleep(1)
+
     return False
+
 
 class ServerStartupError(Exception):
     """Raised when the test server fails to start properly"""
