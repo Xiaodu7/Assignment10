@@ -1,4 +1,6 @@
 # app/models/user.py
+import os
+import secrets
 from datetime import datetime, timedelta
 import uuid
 from typing import Optional, Dict, Any
@@ -19,7 +21,7 @@ Base = declarative_base()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Move to config
-SECRET_KEY = "your-secret-key"
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY") or secrets.token_urlsafe(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -31,12 +33,26 @@ class User(Base):
     last_name = Column(String(50), nullable=False)
     email = Column(String(120), unique=True, nullable=False)
     username = Column(String(50), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    @property
+    def password(self):
+        """Keep compatibility with existing code."""
+        return self.password_hash
+
+    @password.setter
+    def password(self, value: str):
+        """Store a hashed password instead of plain text."""
+        if pwd_context.identify(value):
+            self.password_hash = value
+        else:
+            self.password_hash = self.hash_password(value)
+
 
     def __repr__(self):
         return f"<User(name={self.first_name} {self.last_name}, email={self.email})>"
@@ -48,7 +64,7 @@ class User(Base):
 
     def verify_password(self, plain_password: str) -> bool:
         """Verify a plain password against the hashed password."""
-        return pwd_context.verify(plain_password, self.password)
+        return pwd_context.verify(plain_password, self.password_hash)
 
     @staticmethod
     def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
